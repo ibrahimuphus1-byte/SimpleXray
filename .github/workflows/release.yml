@@ -87,7 +87,6 @@ jobs:
           mkdir -p ../app/src/main/jniLibs/arm64-v8a
           mv xray ../app/src/main/jniLibs/arm64-v8a/libxray.so
 
-      # ---- Generate a fresh keystore with fixed, simple passwords ----
       - name: Generate signing keystore
         run: |
           keytool -genkey -v -keystore release.jks \
@@ -124,10 +123,13 @@ jobs:
           fi
           bash .github/scripts/gen_release_notes.sh -r "$RANGE" -o release.md
 
+      # The only changed step – now explicitly tells the action which tag to use
       - name: Create Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ env.RELEASE_VERSION }}
+          release_name: ${{ env.RELEASE_VERSION }}
           prerelease: ${{ contains(env.RELEASE_VERSION, '-') }}
           draft: false
           generate_release_notes: false
