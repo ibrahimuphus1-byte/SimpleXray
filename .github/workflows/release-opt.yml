@@ -56,7 +56,7 @@ jobs:
       - name: Set up Go (latest stable for better performance)
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'   # override version.properties
+          go-version: '1.24'   # override version.properties – use 1.24 or later
           cache: false
 
       - name: Setup Gradle
@@ -70,7 +70,8 @@ jobs:
 
       - name: Build Xray-core from Source (with optimizations)
         run: |
-          wget -qO android-ndk.zip https://dl.google.com/android/repository/android-ndk-r29c-linux.zip   # updated NDK
+          # Use NDK r28c – verified working
+          wget -qO android-ndk.zip https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
           unzip -q android-ndk.zip
           rm android-ndk.zip
           NDK_HOME=$(realpath android-ndk-*)
@@ -84,10 +85,11 @@ jobs:
           export GOARCH=arm64
           export CC=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
 
-          # Optimization flags
+          # ------ PERFORMANCE FLAGS ------
           export CGO_CFLAGS="-O3 -flto -march=armv8-a+crc+crypto -mtune=cortex-a76"
           export CGO_LDFLAGS="-flto -O3"
           export GOFLAGS="-buildmode=pie -gcflags='all=-l=0 -B' -asmflags='all=-shared'"
+          # --------------------------------
 
           go build -o xray -trimpath -buildvcs=false \
             -ldflags="-X github.com/patterniha/xray-core/core.build=${COMMID} -s -w -buildid= -checklinkname=0" \
