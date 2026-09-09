@@ -46,7 +46,6 @@ jobs:
             RELEASE_VERSION="${{ github.event.inputs.release_tag }}"
           fi
 
-          # Only check that it starts with vX.Y.Z (allow extra suffixes)
           if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
             echo "Invalid release tag: $RELEASE_VERSION" >&2
             exit 1
@@ -128,12 +127,12 @@ jobs:
           KEY_ALIAS: ${{ env.KEY_ALIAS }}
           KEY_PASSWORD: ${{ env.KEY_PASSWORD }}
 
-      - name: Prepare release files
+      - name: Locate and prepare release APK
         run: |
-          # Find the generated APK (works regardless of naming)
-          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          # Search for any APK produced by the build
+          APK_PATH=$(find app -name "*.apk" | head -n 1)
           if [ -z "$APK_PATH" ]; then
-            echo "No APK found in app/build/outputs/apk/release/"
+            echo "No APK found in app/ – build may have failed to produce one."
             exit 1
           fi
           echo "Found APK: $APK_PATH"
