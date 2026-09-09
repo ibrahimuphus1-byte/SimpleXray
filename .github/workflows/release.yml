@@ -79,9 +79,6 @@ jobs:
           rm android-ndk.zip
           NDK_HOME=$(realpath android-ndk-*)
 
-          # Shallow-clone the exact tag: a plain --depth=1 clone of the default
-          # branch does not fetch any tags, so `git checkout <tag>` would fail
-          # (pathspec did not match). --branch accepts a tag and checks it out.
           git clone --depth=1 --branch ${{ env.XRAY_VERSION }} https://github.com/patterniha/Xray-core.git
           cd Xray-core
           COMMID=$(git rev-parse HEAD | cut -c 1-7)
@@ -90,20 +87,29 @@ jobs:
           export CGO_ENABLED=1
           export GOARCH=arm64
           export CC=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
-          # -checklinkname=0: wlynxg/anet still linknames net internal symbols
-          # (net.zoneCache), which Go 1.26's strict check rejects. Xray's own
-          # release workflow uses the same flag for Android builds.
           go build -o xray -trimpath -buildvcs=false -ldflags="-X github.com/patterniha/xray-core/core.build=${COMMID} -s -w -buildid= -checklinkname=0" -v ./main
           mkdir -p ../app/src/main/jniLibs/arm64-v8a
           mv xray ../app/src/main/jniLibs/arm64-v8a/libxray.so
 
-      - name: Set up signing keystore
+      # --- Signing and build steps ---
+      - name: Set up signing keystore (if secret exists)
+        id: sign
         run: |
-          [ -n "${{ secrets.SIGNING_KEY }}" ] || { echo "SIGNING_KEY secret is not set" >&2; exit 1; }
-          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > release.jks
+          if [ -n "${{ secrets.SIGNING_KEY }}" ]; then
+            echo "${{ secrets.SIGNING_KEY }}" | base64 -d > release.jks
+            echo "HAS_SIGNING=true" >> $GITHUB_ENV
+          else
+            echo "SIGNING_KEY not set – will build debug APK instead"
+            echo "HAS_SIGNING=false" >> $GITHUB_ENV
+          fi
 
-      - name: Build release APK
-        run: bash ./gradlew assembleRelease -x lint -PappVerName=${{ env.RELEASE_VERSION }}
+      - name: Build APK
+        run: |
+          if [ "${{ env.HAS_SIGNING }}" == "true" ]; then
+            bash ./gradlew assembleRelease -x lint -PappVerName=${{ env.RELEASE_VERSION }}
+          else
+            bash ./gradlew assembleDebug -x lint -PappVerName=${{ env.RELEASE_VERSION }}
+          fi
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/release.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
@@ -112,15 +118,16 @@ jobs:
 
       - name: Prepare release files
         run: |
-          cp app/build/outputs/apk/release/simplexray-arm64-v8a.apk SimpleXray-arm64-v8a-${{ env.RELEASE_VERSION }}.apk
+          if [ "${{ env.HAS_SIGNING }}" == "true" ]; then
+            cp app/build/outputs/apk/release/simplexray-arm64-v8a.apk SimpleXray-arm64-v8a-${{ env.RELEASE_VERSION }}.apk
+          else
+            cp app/build/outputs/apk/debug/simplexray-arm64-v8a-debug.apk SimpleXray-arm64-v8a-debug-${{ env.RELEASE_VERSION }}.apk
+          fi
 
       - name: Generate release notes
         shell: bash
         run: |
           CURRENT_TAG="${RELEASE_VERSION}"
-          # No previous tag on first release: grep exits 1 on no match, which
-          # pipefail turns into a step failure. `|| true` keeps PREV_TAG empty
-          # so the script falls back to a single-tag range.
           PREV_TAG="$(git tag --sort=-v:refname | grep -Fxv "$CURRENT_TAG" | head -n 1 || true)"
           if [ -z "$PREV_TAG" ]; then
             RANGE="$CURRENT_TAG"
@@ -129,7 +136,8 @@ jobs:
           fi
           bash .github/scripts/gen_release_notes.sh -r "$RANGE" -o release.md
 
-      - name: Create Release
+      - name: Create Release (skip if debug build)
+        if: env.HAS_SIGNING == 'true'
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
