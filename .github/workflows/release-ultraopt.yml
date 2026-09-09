@@ -68,7 +68,7 @@ jobs:
           wget https://raw.githubusercontent.com/Chocolate4U/Iran-v2ray-rules/release/geoip.dat -O ./app/src/main/assets/geoip.dat
           wget https://raw.githubusercontent.com/Chocolate4U/Iran-v2ray-rules/release/geosite.dat -O ./app/src/main/assets/geosite.dat
 
-      - name: Build Xray-core from Source (optimised)
+      - name: Build Xray-core from Source (fully optimised)
         run: |
           wget -qO android-ndk.zip https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
           unzip -q android-ndk.zip
@@ -84,16 +84,17 @@ jobs:
           export GOARCH=arm64
           export CC=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
 
-          # Optimise C/C++ parts for size (Go will use these for CGO)
+          # Linker flags: use LLD, garbage-collect unused sections, avoid linking unused libs, enable hardening
+          export CGO_LDFLAGS="-fuse-ld=lld -Wl,--gc-sections -Wl,--as-needed -Wl,-z,now -Wl,-z,relro"
+
+          # Optimise C/C++ code for size and cache efficiency
           export CFLAGS="-Oz -fomit-frame-pointer -fdata-sections -ffunction-sections -march=armv8-a"
           export CXXFLAGS="-Oz -fomit-frame-pointer -fdata-sections -ffunction-sections -march=armv8-a"
 
-          # Build as a shared library:
-          # - No -static (breaks Android system libs like liblog)
-          # - Use LLD linker, garbage-collect unused C sections, and add hardening flags
+          # Build as a shared library with default inlining (removed -gcflags all=-l=4)
           go build -buildmode=c-shared -o libxray.so \
             -trimpath -buildvcs=false \
-            -ldflags="-X github.com/patterniha/xray-core/core.build=${COMMID} -s -w -extldflags='-fuse-ld=lld -Wl,--gc-sections -Wl,--as-needed -Wl,-z,now -Wl,-z,relro' -buildid= -checklinkname=0" \
+            -ldflags="-X github.com/patterniha/xray-core/core.build=${COMMID} -s -w -buildid= -checklinkname=0" \
             -v ./main
 
           mkdir -p ../app/src/main/jniLibs/arm64-v8a
