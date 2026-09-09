@@ -46,6 +46,7 @@ jobs:
             RELEASE_VERSION="${{ github.event.inputs.release_tag }}"
           fi
 
+          # Only check that it starts with vX.Y.Z (allow extra suffixes)
           if [[ ! "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
             echo "Invalid release tag: $RELEASE_VERSION" >&2
             exit 1
@@ -84,14 +85,14 @@ jobs:
           export GOARCH=arm64
           export CC=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
 
-          # Linker flags: use LLD, garbage-collect unused sections, avoid linking unused libs, enable hardening
+          # Linker flags: use LLD, garbage-collect unused sections, avoid unused libs, hardening
           export CGO_LDFLAGS="-fuse-ld=lld -Wl,--gc-sections -Wl,--as-needed -Wl,-z,now -Wl,-z,relro"
 
           # Optimise C/C++ code for size and cache efficiency
           export CFLAGS="-Oz -fomit-frame-pointer -fdata-sections -ffunction-sections -march=armv8-a"
           export CXXFLAGS="-Oz -fomit-frame-pointer -fdata-sections -ffunction-sections -march=armv8-a"
 
-          # Build as a shared library with default inlining (removed -gcflags all=-l=4)
+          # Build as a shared library (default inlining allowed)
           go build -buildmode=c-shared -o libxray.so \
             -trimpath -buildvcs=false \
             -ldflags="-X github.com/patterniha/xray-core/core.build=${COMMID} -s -w -buildid= -checklinkname=0" \
@@ -129,7 +130,14 @@ jobs:
 
       - name: Prepare release files
         run: |
-          cp app/build/outputs/apk/release/simplexray-arm64-v8a.apk SimpleXray-arm64-v8a-${{ env.RELEASE_VERSION }}.apk
+          # Find the generated APK (works regardless of naming)
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK found in app/build/outputs/apk/release/"
+            exit 1
+          fi
+          echo "Found APK: $APK_PATH"
+          cp "$APK_PATH" "SimpleXray-arm64-v8a-${{ env.RELEASE_VERSION }}.apk"
 
       - name: Generate release notes
         shell: bash
