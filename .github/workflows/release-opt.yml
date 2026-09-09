@@ -78,15 +78,20 @@ jobs:
           git clone --depth=1 --branch ${{ env.XRAY_VERSION }} https://github.com/patterniha/Xray-core.git
           cd Xray-core
 
-          # Fix Go version requirement
+          # 1. Force Go version to 1.24
           sed -i 's/^go 1.27/go 1.24/' go.mod
 
-          # Replace problematic dependencies with compatible versions
+          # 2. Replace known problematic modules with compatible versions
           go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20230822234917-5d4e5b4f5f5e
           go mod edit -replace=github.com/apernet/quic-go=github.com/quic-go/quic-go@v0.40.0
+          go mod edit -replace=github.com/cloudflare/circl=github.com/cloudflare/circl@v1.3.7
 
+          # 3. Set toolchain to force Go 1.24 (prevents auto-upgrade)
+          export GOTOOLCHAIN=go1.24.13
+
+          # 4. Download and tidy, enforcing compatibility with 1.24
           go mod download
-          go mod tidy
+          go mod tidy -compat=1.24
 
           COMMID=$(git rev-parse HEAD | cut -c 1-7)
 
