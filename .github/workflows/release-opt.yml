@@ -1,4 +1,4 @@
-name: Build and Publish Release APK(opt)
+name: Build and Publish Release APK opt
 
 on:
   push:
@@ -53,10 +53,10 @@ jobs:
 
           echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
 
-      - name: Set up Go (latest stable for better performance)
+      - name: Set up Go (using Go 1.24)
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'   # override version.properties – you can also use 1.23
+          go-version: '1.24'
           cache: false
 
       - name: Setup Gradle
@@ -77,6 +77,10 @@ jobs:
 
           git clone --depth=1 --branch ${{ env.XRAY_VERSION }} https://github.com/patterniha/Xray-core.git
           cd Xray-core
+
+          # 🔥 PATCH go.mod TO ALLOW GO 1.24 🔥
+          sed -i 's/^go 1.27/go 1.24/' go.mod
+
           COMMID=$(git rev-parse HEAD | cut -c 1-7)
 
           export GOOS=android
@@ -84,10 +88,8 @@ jobs:
           export GOARCH=arm64
           export CC=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
 
-          # PERFORMANCE FLAGS (keep these – they work)
           export CGO_CFLAGS="-O3 -flto -march=armv8-a+crc+crypto -mtune=cortex-a76"
           export CGO_LDFLAGS="-flto -O3"
-          # We removed the invalid GOFLAGS line – now only these two are set
 
           go build -o xray -trimpath -buildvcs=false \
             -ldflags="-X github.com/patterniha/xray-core/core.build=${COMMID} -s -w -buildid= -checklinkname=0" \
