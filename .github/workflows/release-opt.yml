@@ -1,4 +1,4 @@
-name: Build and Publish Release APKopt
+name: Build and Publish Release APK-opt
 
 on:
   push:
@@ -81,11 +81,10 @@ jobs:
           # Fix Go version requirement
           sed -i 's/^go 1.27/go 1.24/' go.mod
 
-          # Replace problematic dependencies with older versions compatible with Go 1.24
+          # Replace problematic dependencies with compatible versions
           go mod edit -replace=gvisor.dev/gvisor=gvisor.dev/gvisor@v0.0.0-20230822234917-5d4e5b4f5f5e
-          go mod edit -replace=github.com/apernet/quic-go=github.com/apernet/quic-go@v0.40.0
+          go mod edit -replace=github.com/apernet/quic-go=github.com/quic-go/quic-go@v0.40.0
 
-          # Download and tidy to resolve dependencies
           go mod download
           go mod tidy
 
